@@ -1,3 +1,4 @@
+use std::mem::size_of;
 use std::{
     cmp,
     collections::VecDeque,
@@ -75,7 +76,7 @@ use spaces::Retransmits;
 use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
 
 mod stats;
-pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
+pub use stats::{ConnectionStats, FrameStats, PathStats, QueueStats, RecoveryStats, UdpStats};
 
 mod streams;
 #[cfg(fuzzing)]
@@ -1295,6 +1296,33 @@ impl Connection {
         stats.path.min_rtt = self.path.rtt.min();
         stats.path.cwnd = self.path.congestion.window();
         stats.path.current_mtu = self.path.mtud.current_mtu();
+        stats.queues = self.streams.queue_stats();
+        stats.recovery.stream_data_retransmissions = self.streams.data_retransmissions;
+        stats.recovery.stream_data_retransmitted_bytes = self.streams.data_retransmitted_bytes;
+        for space in self.spaces.iter() {
+            let (buffered, allocated, metadata) = space.crypto_stream.memory_usage();
+            stats.queues.crypto_receive_buffered += buffered;
+            stats.queues.crypto_receive_allocated += allocated;
+            stats.queues.metadata_allocated += metadata;
+            stats.queues.crypto_send_buffered += space
+                .pending
+                .crypto
+                .iter()
+                .map(|c| c.data.len() as u64)
+                .sum::<u64>();
+            stats.queues.crypto_send_buffered += space
+                .sent_packets
+                .values()
+                .flat_map(|p| p.retransmits.get())
+                .flat_map(|r| r.crypto.iter())
+                .map(|c| c.data.len() as u64)
+                .sum::<u64>();
+        }
+        stats.queues.datagram_receive_buffered = self.datagrams.incoming.payload_bytes() as u64;
+        stats.queues.datagram_send_buffered = self.datagrams.outgoing.payload_bytes() as u64;
+        stats.queues.metadata_allocated += ((self.datagrams.incoming.capacity()
+            + self.datagrams.outgoing.capacity())
+            * size_of::<frame::Datagram>()) as u64;
 
         stats
     }
@@ -2342,6 +2370,8 @@ impl Connection {
 
                 let is_duplicate = |n| self.spaces[packet.header.space()].dedup.insert(n);
                 if number.is_some_and(is_duplicate) {
+                    self.stats.recovery.duplicate_packets =
+                        self.stats.recovery.duplicate_packets.saturating_add(1);
                     debug!("discarding possible duplicate packet");
                     return;
                 } else if self.state.is_handshake() && packet.header.is_short() {

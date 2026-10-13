@@ -45,7 +45,7 @@ impl Connecting {
         handle: ConnectionHandle,
         conn: proto::Connection,
         endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
-        conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
+        conn_events: crate::queued_events::Receiver,
         socket: Arc<dyn AsyncUdpSocket>,
         runtime: Arc<dyn Runtime>,
     ) -> Self {
@@ -552,7 +552,13 @@ impl Connection {
 
     /// Returns connection statistics
     pub fn stats(&self) -> ConnectionStats {
-        self.0.state.lock("stats").inner.stats()
+        let state = self.0.state.lock("stats");
+        let mut stats = state.inner.stats();
+        stats.queues.driver_send_allocated = state.send_buffer.capacity() as u64;
+        stats.queues.driver_receive_queued = state.conn_events.queued_bytes();
+        stats.queues.metadata_allocated +=
+            (std::mem::size_of::<State>() - std::mem::size_of::<proto::Connection>()) as u64;
+        stats
     }
 
     /// Current state of the congestion control algorithm, for debugging purposes
@@ -899,7 +905,7 @@ impl ConnectionRef {
         handle: ConnectionHandle,
         conn: proto::Connection,
         endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
-        conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
+        conn_events: crate::queued_events::Receiver,
         on_handshake_data: oneshot::Sender<()>,
         on_connected: oneshot::Sender<bool>,
         socket: Arc<dyn AsyncUdpSocket>,
@@ -997,7 +1003,7 @@ pub(crate) struct State {
     connected: bool,
     timer: Option<Pin<Box<dyn AsyncTimer>>>,
     timer_deadline: Option<Instant>,
-    conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
+    conn_events: crate::queued_events::Receiver,
     endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
     pub(crate) blocked_writers: FxHashMap<StreamId, Waker>,
     pub(crate) blocked_readers: FxHashMap<StreamId, Waker>,

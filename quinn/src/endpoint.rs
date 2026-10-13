@@ -92,7 +92,10 @@ impl Endpoint {
 
     /// Returns relevant stats from this Endpoint
     pub fn stats(&self) -> EndpointStats {
-        self.inner.state.lock().unwrap().stats
+        let state = self.inner.state.lock().unwrap();
+        let mut stats = state.stats;
+        stats.receive_buffer_allocated = state.recv_state.recv_buf.len() as u64;
+        stats
     }
 
     /// Helper to construct an endpoint for use with both incoming and outgoing connections
@@ -339,6 +342,9 @@ impl Endpoint {
 #[non_exhaustive]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct EndpointStats {
+    /// Reusable UDP receive buffer owned by this endpoint, shared by its connections.
+    /// This is a current allocation, not a traffic counter or socket buffer size.
+    pub receive_buffer_allocated: u64,
     /// Cummulative number of Quic handshakes accepted by this [Endpoint]
     pub accepted_handshakes: u64,
     /// Cummulative number of Quic handshakees sent from this [Endpoint]
@@ -596,7 +602,7 @@ fn proto_ecn(ecn: udp::EcnCodepoint) -> proto::EcnCodepoint {
 #[derive(Debug)]
 struct ConnectionSet {
     /// Senders for communicating with the endpoint's connections
-    senders: FxHashMap<ConnectionHandle, mpsc::UnboundedSender<ConnectionEvent>>,
+    senders: FxHashMap<ConnectionHandle, crate::queued_events::Sender>,
     /// Stored to give out clones to new ConnectionInners
     sender: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
     /// Set if the endpoint has been manually closed
@@ -611,7 +617,7 @@ impl ConnectionSet {
         socket: Arc<dyn AsyncUdpSocket>,
         runtime: Arc<dyn Runtime>,
     ) -> Connecting {
-        let (send, recv) = mpsc::unbounded_channel();
+        let (send, recv) = crate::queued_events::channel();
         if let Some((error_code, ref reason)) = self.close {
             send.send(ConnectionEvent::Close {
                 error_code,

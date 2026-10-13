@@ -1,3 +1,4 @@
+use std::mem::size_of;
 use std::{collections::VecDeque, ops::Range};
 
 use bytes::{Buf, Bytes};
@@ -31,6 +32,16 @@ impl SendBuffer {
     /// Construct an empty buffer at the initial offset
     pub(super) fn new() -> Self {
         Self::default()
+    }
+
+    pub(super) fn memory_usage(&self) -> (u64, u64) {
+        (
+            (self.unacked_len + self.front_trimmed) as u64,
+            (self.unacked_segments.capacity() * size_of::<Bytes>()) as u64,
+        )
+    }
+    pub(super) fn has_retransmits(&self) -> bool {
+        !self.retransmits.is_empty()
     }
 
     /// Append application data to the end of the stream

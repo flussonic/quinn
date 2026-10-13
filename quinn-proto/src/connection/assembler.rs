@@ -1,3 +1,4 @@
+use std::mem::size_of;
 use std::{
     cmp::{Ordering, max},
     collections::{BinaryHeap, binary_heap::PeekMut},
@@ -27,6 +28,14 @@ pub(super) struct Assembler {
 impl Assembler {
     pub(super) fn new() -> Self {
         Self::default()
+    }
+
+    pub(super) fn memory_usage(&self) -> (u64, u64, u64) {
+        (
+            self.buffered as u64,
+            self.allocated as u64,
+            (self.data.capacity() * size_of::<Buffer>()) as u64,
+        )
     }
 
     /// Reset to the initial state
