@@ -1300,10 +1300,10 @@ impl Connection {
         stats.recovery.stream_data_retransmissions = self.streams.data_retransmissions;
         stats.recovery.stream_data_retransmitted_bytes = self.streams.data_retransmitted_bytes;
         for space in self.spaces.iter() {
-            let (buffered, allocated, metadata) = space.crypto_stream.memory_usage();
-            stats.queues.crypto_receive_buffered += buffered;
-            stats.queues.crypto_receive_allocated += allocated;
-            stats.queues.metadata_allocated += metadata;
+            let memory = space.crypto_stream.memory_usage();
+            stats.queues.crypto_receive_buffered += memory.buffered_bytes;
+            stats.queues.crypto_receive_allocated += memory.allocated_bytes;
+            stats.queues.metadata_allocated += memory.metadata_bytes;
             stats.queues.crypto_send_buffered += space
                 .pending
                 .crypto

@@ -157,20 +157,20 @@ impl StreamsState {
         };
         for receiver in self.recv.values().filter_map(Option::as_ref) {
             let (StreamRecv::Free(recv) | StreamRecv::Open(recv)) = receiver;
-            let (buffered, allocated, metadata) = recv.assembler.memory_usage();
-            stats.stream_receive_buffered += buffered;
-            stats.stream_receive_allocated += allocated;
-            stats.metadata_allocated += metadata + size_of::<Recv>() as u64;
+            let memory = recv.assembler.memory_usage();
+            stats.stream_receive_buffered += memory.buffered_bytes;
+            stats.stream_receive_allocated += memory.allocated_bytes;
+            stats.metadata_allocated += memory.metadata_bytes + size_of::<Recv>() as u64;
         }
         for receiver in &self.free_recv {
             let (StreamRecv::Free(recv) | StreamRecv::Open(recv)) = receiver;
-            let (_, _, metadata) = recv.assembler.memory_usage();
-            stats.metadata_allocated += metadata + size_of::<Recv>() as u64;
+            let memory = recv.assembler.memory_usage();
+            stats.metadata_allocated += memory.metadata_bytes + size_of::<Recv>() as u64;
         }
         for send in self.send.values().filter_map(Option::as_ref) {
-            let (buffered, metadata) = send.pending.memory_usage();
-            stats.stream_send_buffered += buffered;
-            stats.metadata_allocated += metadata + size_of::<Send>() as u64;
+            let memory = send.pending.memory_usage();
+            stats.stream_send_buffered += memory.buffered_bytes;
+            stats.metadata_allocated += memory.metadata_bytes + size_of::<Send>() as u64;
         }
         stats
     }

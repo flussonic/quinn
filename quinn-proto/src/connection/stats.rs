@@ -2,6 +2,17 @@
 
 use crate::{Dir, Duration, frame::Frame};
 
+/// Current payload retention and container allocation of a protocol buffer.
+#[derive(Debug, Default, Copy, Clone)]
+pub(super) struct MemoryUsage {
+    /// Buffered payload bytes, including overlapping chunks or retained send prefixes.
+    pub buffered_bytes: u64,
+    /// Estimated retained payload allocation, excluding container storage.
+    pub allocated_bytes: u64,
+    /// Allocated storage for the container's entries.
+    pub metadata_bytes: u64,
+}
+
 /// Statistics about UDP datagrams transmitted or received on a connection
 ///
 /// All QUIC packets are carried by UDP datagrams. Hence, these statistics cover all traffic on a connection.

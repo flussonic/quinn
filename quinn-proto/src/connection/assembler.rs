@@ -30,12 +30,12 @@ impl Assembler {
         Self::default()
     }
 
-    pub(super) fn memory_usage(&self) -> (u64, u64, u64) {
-        (
-            self.buffered as u64,
-            self.allocated as u64,
-            (self.data.capacity() * size_of::<Buffer>()) as u64,
-        )
+    pub(super) fn memory_usage(&self) -> super::stats::MemoryUsage {
+        super::stats::MemoryUsage {
+            buffered_bytes: self.buffered as u64,
+            allocated_bytes: self.allocated as u64,
+            metadata_bytes: (self.data.capacity() * size_of::<Buffer>()) as u64,
+        }
     }
 
     /// Reset to the initial state

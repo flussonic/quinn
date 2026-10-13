@@ -34,11 +34,13 @@ impl SendBuffer {
         Self::default()
     }
 
-    pub(super) fn memory_usage(&self) -> (u64, u64) {
-        (
-            (self.unacked_len + self.front_trimmed) as u64,
-            (self.unacked_segments.capacity() * size_of::<Bytes>()) as u64,
-        )
+    pub(super) fn memory_usage(&self) -> super::stats::MemoryUsage {
+        let retained = (self.unacked_len + self.front_trimmed) as u64;
+        super::stats::MemoryUsage {
+            buffered_bytes: retained,
+            allocated_bytes: retained,
+            metadata_bytes: (self.unacked_segments.capacity() * size_of::<Bytes>()) as u64,
+        }
     }
     pub(super) fn has_retransmits(&self) -> bool {
         !self.retransmits.is_empty()
